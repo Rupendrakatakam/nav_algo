@@ -72,15 +72,48 @@ int main() {
         current_node = open_list[x];
         closed_list.push_back(current_node);
         open_list.erase(open_list.begin() + x);
-        cout << "Cost of the node with the lowest f is " << min_f << endl;
+        // cout << "Cost of the node with the lowest f is " << min_f << endl;
         cout << "coordinates of the node with the lowest f is " << current_node.x << ", " << current_node.y << endl;
 
 
         // --- NEW: THE GOAL CHECK ---
         if (current_node.x == goal_x && current_node.y == goal_y) {
             cout << "GOAL REACHED at " << current_node.x << ", " << current_node.y << "!" << endl;
-            break; // This shatters the while loop. We are done!
+            vector<Node> final_path;
+            Node trace_node = current_node;
+
+            // 1. Loop backwards until we find the Start Node (parent_x == -1)
+            while (trace_node.parent_x != -1) {
+                // Add the current step to our path
+                final_path.push_back(trace_node);
+                
+                // TODO: Find the parent!
+                // Write a for-loop that searches through the 'closed_list'.
+                // If you find a node in the closed_list whose 'x' and 'y' match 
+                // the trace_node.parent_x and trace_node.parent_y, do TWO things:
+                // 1. trace_node = closed_list[that_index];
+                // 2. break; (to stop searching the closed_list and continue the while loop)
+                for (int i = 0; i < closed_list.size(); i++ ){
+                    if (trace_node.parent_x == closed_list[i].x && trace_node.parent_y == closed_list[i].y ){
+                        trace_node = closed_list[i];
+                        break;
+                    }
+                }
+            }
+            // Add the start node itself to complete the path
+            final_path.push_back(trace_node); 
+
+            // 2. Print the final path instructions!
+            cout << "\n--- FINAL DRIVING PATH ---" << endl;
+            // Since we traced backwards from Goal to Start, we must print the vector in reverse.
+            for (int p = final_path.size() - 1; p >= 0; p--) {
+                cout << "Drive to: [" << final_path[p].x << ", " << final_path[p].y << "]" << endl;
+            }
+
+            break; // Shatter the master while loop. The algorithm is finished.
         }
+        
+
         float step_cost = 0;
         // Loop through the Y offsets (-1, 0, 1)
         for (int dy = -1; dy <= 1; dy++) {
@@ -98,7 +131,7 @@ int main() {
 
                 if (neighbor_x >= 0 && neighbor_x < map_width && neighbor_y >= 0 && neighbor_y < map_height){
                     if (grid[neighbor_y * map_width + neighbor_x] == 1){
-                        cout << "Wall found at: " << neighbor_x << ", " << neighbor_y << endl;
+                        // cout << "Wall found at: " << neighbor_x << ", " << neighbor_y << endl;
                         continue;
                     }
                     else {
@@ -110,6 +143,18 @@ int main() {
                         }
                     
                     }
+
+                    bool in_closed_list = false;
+                    for (int c = 0; c < closed_list.size(); c++) {
+                        if (closed_list[c].x == neighbor_x && closed_list[c].y == neighbor_y) {
+                            in_closed_list = true;
+                            break;
+                        }
+                    }
+
+                    if (in_closed_list == true) {
+                        continue; // Skip this neighbor. We already fully evaluated it!
+                    }
                     
                     float dist_x = abs(neighbor_x - goal_x);
                     float dist_y = abs(neighbor_y - goal_y);
@@ -118,17 +163,36 @@ int main() {
                     float h_cost = 1.0 * (dist_x + dist_y) + (1.414 - 2.0 * 1.0) * std::min(dist_x, dist_y);
                     float f_cost = g_cost + h_cost;
 
-                    Node new_neighbor_node;
-                    new_neighbor_node.x = neighbor_x;
-                    new_neighbor_node.y = neighbor_y;
-                    new_neighbor_node.g = g_cost;
-                    new_neighbor_node.h = h_cost;
-                    new_neighbor_node.f = f_cost;
-                    new_neighbor_node.parent_x = current_node.x;
-                    new_neighbor_node.parent_y = current_node.y;
-                    open_list.push_back(new_neighbor_node);
+                    // Check if this neighbor is already in the open list
+                    bool in_open_list = false;
+                    for (int o = 0; o < open_list.size(); o++) {
+                        if (open_list[o].x == neighbor_x && open_list[o].y == neighbor_y) {
+                            in_open_list = true;
+                            if (g_cost < open_list[o].g) {
+                                // Found a better path — update the node in place
+                                open_list[o].g = g_cost;
+                                open_list[o].h = h_cost;
+                                open_list[o].f = f_cost;
+                                open_list[o].parent_x = current_node.x;
+                                open_list[o].parent_y = current_node.y;
+                            }
+                            break;
+                        }
+                    }
 
-                cout << "Added neighbor at " << neighbor_x << ", " << neighbor_y << " with f_cost: " << f_cost << endl;
+                    if (in_open_list == false) {
+                        Node new_neighbor_node;
+                        new_neighbor_node.x = neighbor_x;
+                        new_neighbor_node.y = neighbor_y;
+                        new_neighbor_node.g = g_cost;
+                        new_neighbor_node.h = h_cost;
+                        new_neighbor_node.f = f_cost;
+                        new_neighbor_node.parent_x = current_node.x;
+                        new_neighbor_node.parent_y = current_node.y;
+                        open_list.push_back(new_neighbor_node);
+                    }
+
+                // cout << "Added neighbor at " << neighbor_x << ", " << neighbor_y << " with f_cost: " << f_cost << endl;
                 }
             }
         }
