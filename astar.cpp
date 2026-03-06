@@ -93,9 +93,17 @@ int main() {
                 continue; // This skips to the next iteration of the loop
             }
 
-            // 3. The Guardrail: Check if the neighbor is inside the map boundaries!
-            if ( neighbor_x >= 0 && neighbor_x < map_width && neighbor_y >= 0 && neighbor_y < map_height ) {
-                cout << "Valid neighbor found at: " << neighbor_x << ", " << neighbor_y << endl;
+            // // 3. The Guardrail: Check if the neighbor is inside the map boundaries!
+            // if ( neighbor_x >= 0 && neighbor_x < map_width && neighbor_y >= 0 && neighbor_y < map_height ) {
+            //     cout << "Valid neighbor found at: " << neighbor_x << ", " << neighbor_y << endl;
+            // }
+
+            if (grid[neighbor_y * map_width + neighbor_x] == 1){
+                cout << "Wall found at: " << neighbor_x << ", " << neighbor_y << endl;
+                continue;
+            }
+            else {
+                cout << "Free space found at: " << neighbor_x << ", " << neighbor_y << endl;
             }
         }
     }
