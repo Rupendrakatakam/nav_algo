@@ -2,6 +2,7 @@
 #include <vector>
 #include <limits>
 #include <cmath>
+#include <queue>
 
 using namespace std;
 
@@ -32,10 +33,16 @@ struct Node {
     int parent_y = -1;
 };
 
+// Comparator for the priority queue to sort by lowest f cost
+struct CompareNode {
+    bool operator()(const Node& a, const Node& b) const {
+        return a.f > b.f; // '>' because priority_queue is a max-heap by default, this makes it a min-heap
+    }
+};
 
 int main() {
     // Now we can use the blueprint to create a Node
-    vector<Node> open_list;
+    priority_queue<Node, vector<Node>, CompareNode> open_list;
     vector<Node> closed_list;
 
     Node current_node; // The node with the lowest f cost
@@ -54,24 +61,25 @@ int main() {
     my_start_node.f = my_start_node.g + my_start_node.h;
 
 
-    open_list.push_back(my_start_node);
+    open_list.push(my_start_node);
 
-    while (open_list.size() > 0){
-        float min_f = numeric_limits<float>::max(); // Initialize min_f to the maximum possible float value
-        int x = -1;
-        for (int i = 0; i < open_list.size(); i++){
+    while (!open_list.empty()){
+        current_node = open_list.top();
+        open_list.pop();
 
-            if (open_list[i].f < min_f){
-                min_f = open_list[i].f;
-                x = i;  
-                    
+        // Lazy deletion: check if we already evaluated this node (since PQ can have duplicates)
+        bool already_expanded = false;
+        for (int c = 0; c < closed_list.size(); c++) {
+            if (closed_list[c].x == current_node.x && closed_list[c].y == current_node.y) {
+                already_expanded = true;
+                break;
             }
         }
-        
+        if (already_expanded) {
+            continue; // Skip processing if we've already found a shorter path to this node
+        }
 
-        current_node = open_list[x];
         closed_list.push_back(current_node);
-        open_list.erase(open_list.begin() + x);
         // cout << "Cost of the node with the lowest f is " << min_f << endl;
         cout << "coordinates of the node with the lowest f is " << current_node.x << ", " << current_node.y << endl;
 
@@ -163,34 +171,17 @@ int main() {
                     float h_cost = 1.0 * (dist_x + dist_y) + (1.414 - 2.0 * 1.0) * std::min(dist_x, dist_y);
                     float f_cost = g_cost + h_cost;
 
-                    // Check if this neighbor is already in the open list
-                    bool in_open_list = false;
-                    for (int o = 0; o < open_list.size(); o++) {
-                        if (open_list[o].x == neighbor_x && open_list[o].y == neighbor_y) {
-                            in_open_list = true;
-                            if (g_cost < open_list[o].g) {
-                                // Found a better path — update the node in place
-                                open_list[o].g = g_cost;
-                                open_list[o].h = h_cost;
-                                open_list[o].f = f_cost;
-                                open_list[o].parent_x = current_node.x;
-                                open_list[o].parent_y = current_node.y;
-                            }
-                            break;
-                        }
-                    }
-
-                    if (in_open_list == false) {
-                        Node new_neighbor_node;
-                        new_neighbor_node.x = neighbor_x;
-                        new_neighbor_node.y = neighbor_y;
-                        new_neighbor_node.g = g_cost;
-                        new_neighbor_node.h = h_cost;
-                        new_neighbor_node.f = f_cost;
-                        new_neighbor_node.parent_x = current_node.x;
-                        new_neighbor_node.parent_y = current_node.y;
-                        open_list.push_back(new_neighbor_node);
-                    }
+                    // Push directly to the priority queue. 
+                    // Any duplicates with higher cost will be skipped intrinsically when popped.
+                    Node new_neighbor_node;
+                    new_neighbor_node.x = neighbor_x;
+                    new_neighbor_node.y = neighbor_y;
+                    new_neighbor_node.g = g_cost;
+                    new_neighbor_node.h = h_cost;
+                    new_neighbor_node.f = f_cost;
+                    new_neighbor_node.parent_x = current_node.x;
+                    new_neighbor_node.parent_y = current_node.y;
+                    open_list.push(new_neighbor_node);
 
                 // cout << "Added neighbor at " << neighbor_x << ", " << neighbor_y << " with f_cost: " << f_cost << endl;
                 }
