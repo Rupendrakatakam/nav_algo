@@ -20,6 +20,12 @@ struct Window {
     float w_max;
 };
 
+// We need to return two numbers (v and w), so we make a quick struct for it.
+struct Command {
+    float v;
+    float w;
+};
+
 // =======================================================================
 // YOUR ASSIGNMENT: Build the Physics Simulator
 // =======================================================================
@@ -30,15 +36,6 @@ vector<RobotState> predict_trajectory(RobotState start_state, float target_v, fl
     trajectory.push_back(current_state);
     
     float time = 0.0;
-    
-    // TODO: Write the simulation loop!
-    // As long as 'time' is less than 'sim_time':
-    // 1. Calculate the new x, y, and theta using the kinematic equations.
-    //    (Hint: Use the standard math library functions cos() and sin())
-    // 2. Update current_state with these new values.
-    // 3. Update current_state's velocities to match target_v and target_w.
-    // 4. Push the updated current_state into the trajectory vector.
-    // 5. Increment 'time' by 'dt'.
 
     while(time < sim_time){
         current_state.v = target_v;
@@ -76,17 +73,59 @@ Window generate_dynamic_window(RobotState robot, float max_v, float min_v, float
     return win;
 }
 
+// A trajectory is a vector of RobotStates. 
+// So a list of trajectories is a vector of vectors!
+vector<vector<RobotState>> generate_all_trajectories(RobotState robot, Window win, float sim_time, float dt, float v_res, float w_res) {
+    vector<vector<RobotState>> all_rollouts;
+
+    for(float v = win.v_min; v <= win.v_max; v += v_res){
+        for(float w = win.w_min; w <= win.w_max; w += w_res){
+            all_rollouts.push_back(predict_trajectory(robot, v, w, sim_time, dt));    
+        }
+    }
+    return all_rollouts;
+}
+
+Command calculate_best_command(vector<vector<RobotState>> all_trajectories, float goal_x, float goal_y) {
+    float best_cost = numeric_limits<float>::max(); // Start with infinitely high cost
+    Command best_cmd = {0.0, 0.0}; // Default command is to stop
+
+    float alpha = 1.0; // Weight for goal distance
+    float gamma = 0.2; // Weight for speed
+
+    // TODO: Write the scoring loop!
+    // 1. Loop through 'all_trajectories'
+    // 2. Extract the final RobotState of the current trajectory: auto final_state = traj.back();
+    // 3. Calculate distance to goal (goal_x, goal_y)
+    // 4. Calculate the cost: (alpha * distance) - (gamma * final_state.v)
+    // 5. If this cost is less than 'best_cost', update 'best_cost' and set 'best_cmd' to this trajectory's v and w!
+    for(auto traj : all_trajectories){
+        auto final_state = traj.back();
+        float distance = sqrt(pow(goal_x - final_state.x, 2) + pow(goal_y - final_state.y, 2));
+        float cost = (alpha * distance) - (gamma * final_state.v);
+        if(cost < best_cost){
+            best_cost = cost;
+            best_cmd = {final_state.v, final_state.w};
+        }
+    }
+
+    return best_cmd;
+}
+
 int main() {
     // 1. Our robot is sitting at the origin, facing completely straight (0 radians), stopped.
     RobotState robot = {0.0, 0.0, 0.0, 0.0, 0.0};
+
+    float goal_x = 2.0;
+    float goal_y = 2.0;
 
     //physical limits
     float max_v = 1.0;
     float min_v = -1.0;
     float max_w = 0.5;
     float min_w = -0.5;
-    float max_accel = 0.1;
-    float max_decel = -0.1;
+    float max_accel = 2.0;
+    float max_decel = -2.0;
     
     // 2. We want to test what happens if we command it to drive forward at 1.0 m/s 
     //    while slightly turning left at 0.5 rad/s.
@@ -101,10 +140,16 @@ int main() {
     Window dynamic_window = generate_dynamic_window(robot, max_v, min_v, max_w, min_w, max_accel, max_decel, dt);
 
     // 3. Print out the predicted path to verify the physics
-    for (int i = 0; i < predicted_path.size(); i += 5) { // Print every 0.5 seconds to save screen space
-        cout << "Time: " << i * dt << "s -> x: " << predicted_path[i].x 
-             << ", y: " << predicted_path[i].y 
-             << ", theta: " << predicted_path[i].theta << endl;
+    // for (int i = 0; i < predicted_path.size(); i += 5) { // Print every 0.5 seconds to save screen space
+    //     cout << "Time: " << i * dt << "s -> x: " << predicted_path[i].x 
+    //          << ", y: " << predicted_path[i].y 
+    //          << ", theta: " << predicted_path[i].theta << endl;
+    // }
+
+    vector<vector<RobotState>> all_trajectories = generate_all_trajectories(robot, dynamic_window, sim_time, dt, 0.1, 0.1);
+    cout << "Generated " << all_trajectories.size() << " trajectories." << endl;
+    for(int i = 0; i < all_trajectories.size(); i++){
+        cout << "Trajectory " << i << ": " << all_trajectories[i].size() << " states" << endl;
     }
 
     return 0;
