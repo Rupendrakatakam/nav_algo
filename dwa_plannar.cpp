@@ -92,7 +92,8 @@ Command calculate_best_command(vector<vector<RobotState>> all_trajectories, floa
 
     float alpha = 1.0; // Weight for goal distance
     float gamma = 0.2; // Weight for speed
-
+    float beta = 0.0; // Weight for heading
+    float obj = 0.0;
     // TODO: Write the scoring loop!
     // 1. Loop through 'all_trajectories'
     // 2. Extract the final RobotState of the current trajectory: auto final_state = traj.back();
@@ -101,8 +102,8 @@ Command calculate_best_command(vector<vector<RobotState>> all_trajectories, floa
     // 5. If this cost is less than 'best_cost', update 'best_cost' and set 'best_cmd' to this trajectory's v and w!
     for(auto traj : all_trajectories){
         auto final_state = traj.back();
-        float distance = sqrt(pow(goal_x - final_state.x, 2) + pow(goal_y - final_state.y, 2));
-        float cost = (alpha * distance) - (gamma * final_state.v);
+        float goal_distance = sqrt(pow(goal_x - final_state.x, 2) + pow(goal_y - final_state.y, 2));
+        float cost = (alpha * goal_distance) +(beta*obj)- (gamma * final_state.v);
         if(cost < best_cost){
             best_cost = cost;
             best_cmd = {final_state.v, final_state.w};
@@ -139,18 +140,10 @@ int main() {
     vector<RobotState> predicted_path = predict_trajectory(robot, test_v, test_w, sim_time, dt);
     Window dynamic_window = generate_dynamic_window(robot, max_v, min_v, max_w, min_w, max_accel, max_decel, dt);
 
-    // 3. Print out the predicted path to verify the physics
-    // for (int i = 0; i < predicted_path.size(); i += 5) { // Print every 0.5 seconds to save screen space
-    //     cout << "Time: " << i * dt << "s -> x: " << predicted_path[i].x 
-    //          << ", y: " << predicted_path[i].y 
-    //          << ", theta: " << predicted_path[i].theta << endl;
-    // }
-
     vector<vector<RobotState>> all_trajectories = generate_all_trajectories(robot, dynamic_window, sim_time, dt, 0.1, 0.1);
-    cout << "Generated " << all_trajectories.size() << " trajectories." << endl;
-    for(int i = 0; i < all_trajectories.size(); i++){
-        cout << "Trajectory " << i << ": " << all_trajectories[i].size() << " states" << endl;
-    }
+
+    Command best_cmd = calculate_best_command(all_trajectories, goal_x, goal_y);
+    cout << "Best command: v = " << best_cmd.v << ", w = " << best_cmd.w << endl;
 
     return 0;
 }
