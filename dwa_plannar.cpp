@@ -26,6 +26,12 @@ struct Command {
     float w;
 };
 
+//walls and obstrucles
+struct Point {
+    float x;
+    float y;
+};
+
 // =======================================================================
 // YOUR ASSIGNMENT: Build the Physics Simulator
 // =======================================================================
@@ -86,14 +92,15 @@ vector<vector<RobotState>> generate_all_trajectories(RobotState robot, Window wi
     return all_rollouts;
 }
 
-Command calculate_best_command(vector<vector<RobotState>> all_trajectories, float goal_x, float goal_y) {
+Command calculate_best_command(vector<vector<RobotState>> all_trajectories, float goal_x, float goal_y, vector<Point> obstacles, float robot_radius) {
     float best_cost = numeric_limits<float>::max(); // Start with infinitely high cost
     Command best_cmd = {0.0, 0.0}; // Default command is to stop
 
     float alpha = 1.0; // Weight for goal distance
     float gamma = 0.2; // Weight for speed
-    float beta = 0.0; // Weight for heading
-    float obj = 0.0;
+    float beta = 1.5; // Weight for heading
+    
+
     // TODO: Write the scoring loop!
     // 1. Loop through 'all_trajectories'
     // 2. Extract the final RobotState of the current trajectory: auto final_state = traj.back();
@@ -101,9 +108,36 @@ Command calculate_best_command(vector<vector<RobotState>> all_trajectories, floa
     // 4. Calculate the cost: (alpha * distance) - (gamma * final_state.v)
     // 5. If this cost is less than 'best_cost', update 'best_cost' and set 'best_cmd' to this trajectory's v and w!
     for(auto traj : all_trajectories){
+        // --- 1. GOAL DISTANCE (Only look at the finish line) ---
         auto final_state = traj.back();
         float goal_distance = sqrt(pow(goal_x - final_state.x, 2) + pow(goal_y - final_state.y, 2));
-        float cost = (alpha * goal_distance) +(beta*obj)- (gamma * final_state.v);
+        float min_dist_to_obstacle = numeric_limits<float>::max();
+        bool crashed = false;
+
+        for (auto state : traj){ 
+            for (auto obs : obstacles){
+                float dist = sqrt(pow(obs.x - state.x, 2) + pow(obs.y - state.y, 2));
+                // If the distance is less than the robot's physical radius, it crashed!
+                if (dist <= robot_radius) {
+                    crashed = true;
+                    break;
+                }
+                // Keep track of the absolute closest we ever got to an obstacle
+                if (dist < min_dist_to_obstacle) {
+                    min_dist_to_obstacle = dist;
+                }
+            }
+            if (crashed){
+                break;
+            }
+        }
+        if(crashed) continue;     // Stop checking this trajectory if we already hit something
+        
+        // 4. The New Cost Formula
+        float clearance_cost = 1.0 / min_dist_to_obstacle; // Higher cost if we get too close
+        
+        // Add beta * clearance_cost to your final cost calculation!
+        float cost = (alpha * goal_distance) + (beta*clearance_cost) - (gamma * final_state.v);
         if(cost < best_cost){
             best_cost = cost;
             best_cmd = {final_state.v, final_state.w};
@@ -119,6 +153,9 @@ int main() {
 
     float goal_x = 2.0;
     float goal_y = 2.0;
+
+    float robot_radius = 0.3;
+    vector<Point> obstacles = { {0.5, 0.5}, {0.6, 0.6} };
 
     //physical limits
     float max_v = 1.0;
@@ -142,7 +179,7 @@ int main() {
 
     vector<vector<RobotState>> all_trajectories = generate_all_trajectories(robot, dynamic_window, sim_time, dt, 0.1, 0.1);
 
-    Command best_cmd = calculate_best_command(all_trajectories, goal_x, goal_y);
+    Command best_cmd = calculate_best_command(all_trajectories, goal_x, goal_y,obstacles,robot_radius);
     cout << "Best command: v = " << best_cmd.v << ", w = " << best_cmd.w << endl;
 
     return 0;
