@@ -97,16 +97,9 @@ Command calculate_best_command(vector<vector<RobotState>> all_trajectories, floa
     Command best_cmd = {0.0, 0.0}; // Default command is to stop
 
     float alpha = 1.0; // Weight for goal distance
-    float gamma = 0.2; // Weight for speed
-    float beta = 1.5; // Weight for heading
-    
-
-    // TODO: Write the scoring loop!
-    // 1. Loop through 'all_trajectories'
-    // 2. Extract the final RobotState of the current trajectory: auto final_state = traj.back();
-    // 3. Calculate distance to goal (goal_x, goal_y)
-    // 4. Calculate the cost: (alpha * distance) - (gamma * final_state.v)
-    // 5. If this cost is less than 'best_cost', update 'best_cost' and set 'best_cmd' to this trajectory's v and w!
+    float gamma = 3.0; // Weight for speed
+    float beta = 0.2; // Weight for clearance
+    float delta = 1.5; // Weight for heading 
     for(auto traj : all_trajectories){
         // --- 1. GOAL DISTANCE (Only look at the finish line) ---
         auto final_state = traj.back();
@@ -136,8 +129,21 @@ Command calculate_best_command(vector<vector<RobotState>> all_trajectories, floa
         // 4. The New Cost Formula
         float clearance_cost = 1.0 / min_dist_to_obstacle; // Higher cost if we get too close
         
+        // --- NEW: HEADING ALIGNMENT ---
+        // 1. What angle is the goal relative to the world?
+        float angle_to_goal = atan2(goal_y - final_state.y, goal_x - final_state.x);
+        
+        // 2. What is the difference between where we are looking and where the goal is?
+        float heading_error = angle_to_goal - final_state.theta;
+        
+        // 3. Normalize the error to be between -PI and +PI
+        while (heading_error > M_PI)  heading_error -= 2.0 * M_PI;
+        while (heading_error < -M_PI) heading_error += 2.0 * M_PI;
+        
+        float heading_cost = abs(heading_error);
+
         // Add beta * clearance_cost to your final cost calculation!
-        float cost = (alpha * goal_distance) + (beta*clearance_cost) - (gamma * final_state.v);
+        float cost = (alpha * goal_distance) + (beta*clearance_cost) + (delta*heading_cost) - (gamma * final_state.v);
         if(cost < best_cost){
             best_cost = cost;
             best_cmd = {final_state.v, final_state.w};
@@ -148,39 +154,69 @@ Command calculate_best_command(vector<vector<RobotState>> all_trajectories, floa
 }
 
 int main() {
-    // 1. Our robot is sitting at the origin, facing completely straight (0 radians), stopped.
+    // 1. Initial Setup
     RobotState robot = {0.0, 0.0, 0.0, 0.0, 0.0};
-
     float goal_x = 2.0;
     float goal_y = 2.0;
-
     float robot_radius = 0.3;
-    vector<Point> obstacles = { {0.5, 0.5}, {0.6, 0.6} };
+    vector<Point> obstacles = { {0.5, 0.5}, {0.6, 0.6}, {1.0, 1.2} };
 
-    //physical limits
+    // 2. Physical Constraints
     float max_v = 1.0;
-    float min_v = -1.0;
-    float max_w = 0.5;
-    float min_w = -0.5;
+    float min_v = 0.0; // Don't reverse too fast
+    float max_w = 1.0;
+    float min_w = -1.0;
     float max_accel = 2.0;
     float max_decel = -2.0;
     
-    // 2. We want to test what happens if we command it to drive forward at 1.0 m/s 
-    //    while slightly turning left at 0.5 rad/s.
-    float test_v = 1.0;
-    float test_w = 0.5;
-    float sim_time = 3.0; // Predict 3 seconds into the future
-    float dt = 0.1;       // Calculate a frame every 0.1 seconds
+    // 3. Timing
+    float sim_time = 3.0; 
+    float dt = 0.1;       
 
-    cout << "Simulating Trajectory: v = " << test_v << " m/s, w = " << test_w << " rad/s" << endl;
+    cout << "STARTING DWA NAVIGATION..." << endl;
     
-    vector<RobotState> predicted_path = predict_trajectory(robot, test_v, test_w, sim_time, dt);
-    Window dynamic_window = generate_dynamic_window(robot, max_v, min_v, max_w, min_w, max_accel, max_decel, dt);
+    int iteration = 0;
+    float dist_to_goal = hypot(goal_x - robot.x, goal_y - robot.y);
 
-    vector<vector<RobotState>> all_trajectories = generate_all_trajectories(robot, dynamic_window, sim_time, dt, 0.1, 0.1);
+    // 4. THE MASTER LOOP
+    while (dist_to_goal > 0.1) {
+        
+        // Step A: Calculate the safe window of velocities
+        Window dynamic_window = generate_dynamic_window(robot, max_v, min_v, max_w, min_w, max_accel, max_decel, dt);
 
-    Command best_cmd = calculate_best_command(all_trajectories, goal_x, goal_y,obstacles,robot_radius);
-    cout << "Best command: v = " << best_cmd.v << ", w = " << best_cmd.w << endl;
+        // Step B: Generate the futures
+        vector<vector<RobotState>> all_trajectories = generate_all_trajectories(robot, dynamic_window, sim_time, dt, 0.1, 0.1);
+
+        // Step C: Critic scores the futures and picks the best one
+        Command best_cmd = calculate_best_command(all_trajectories, goal_x, goal_y, obstacles, robot_radius);
+
+        // Step D: EXECUTE! Move the robot for exactly one dt using the chosen command
+        // We use our predict function, but we only predict exactly 1 dt into the future.
+        vector<RobotState> execution = predict_trajectory(robot, best_cmd.v, best_cmd.w, dt, dt);
+        
+        // The robot actually moves to the new position
+        robot = execution.back(); 
+
+        // Update the loop condition
+        dist_to_goal = hypot(goal_x - robot.x, goal_y - robot.y);
+        
+        if (iteration % 10 == 0) {
+            cout << "Time: " << iteration * dt << "s | Pos: [" << robot.x << ", " << robot.y 
+                 << "] | Cmd: v=" << best_cmd.v << ", w=" << best_cmd.w 
+                 << " | Dist to goal: " << dist_to_goal << endl;
+        }
+        
+        iteration++;
+        
+        if (iteration > 200) {
+            cout << "SIMULATION TIMEOUT. Robot got stuck!" << endl;
+            break;
+        }
+    }
+
+    if (dist_to_goal <= 0.1) {
+        cout << "\nSUCCESS! Goal reached at [" << robot.x << ", " << robot.y << "]" << endl;
+    }
 
     return 0;
 }
