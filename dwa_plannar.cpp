@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <fstream>
 
 using namespace std;
 
@@ -153,70 +154,63 @@ Command calculate_best_command(vector<vector<RobotState>> all_trajectories, floa
     return best_cmd;
 }
 
-int main() {
-    // 1. Initial Setup
-    RobotState robot = {0.0, 0.0, 0.0, 0.0, 0.0};
-    float goal_x = 2.0;
-    float goal_y = 2.0;
-    float robot_radius = 0.3;
-    vector<Point> obstacles = { {0.5, 0.5}, {0.6, 0.6}, {1.0, 1.2} };
+#include <fstream> // NEW: For writing to CSV
 
-    // 2. Physical Constraints
+// ... (Keep all your structs and DWA functions exactly the same) ...
+
+int main() {
+    RobotState robot = {0.0, 0.0, 0.0, 0.0, 0.0};
+    float goal_x = 3.0;
+    float goal_y = 3.0;
+    float robot_radius = 0.3;
+    
+    // Let's create a "wall" of obstacles to test our visualizer
+    vector<Point> obstacles = { 
+        {1.5, 1.2}, {1.5, 1.5}, {1.5, 1.8}, {1.5, 2.1} 
+    };
+
     float max_v = 1.0;
-    float min_v = 0.0; // Don't reverse too fast
+    float min_v = 0.0; // No reversing
     float max_w = 1.0;
     float min_w = -1.0;
     float max_accel = 2.0;
     float max_decel = -2.0;
     
-    // 3. Timing
     float sim_time = 3.0; 
     float dt = 0.1;       
+
+    // --- NEW: OPEN THE CSV FILE ---
+    ofstream log_file("robot_path.csv");
+    log_file << "x,y,theta" << "\n"; // Write the header
+    log_file << robot.x << "," << robot.y << "," << robot.theta << "\n";
 
     cout << "STARTING DWA NAVIGATION..." << endl;
     
     int iteration = 0;
     float dist_to_goal = hypot(goal_x - robot.x, goal_y - robot.y);
 
-    // 4. THE MASTER LOOP
     while (dist_to_goal > 0.1) {
-        
-        // Step A: Calculate the safe window of velocities
         Window dynamic_window = generate_dynamic_window(robot, max_v, min_v, max_w, min_w, max_accel, max_decel, dt);
-
-        // Step B: Generate the futures
         vector<vector<RobotState>> all_trajectories = generate_all_trajectories(robot, dynamic_window, sim_time, dt, 0.1, 0.1);
-
-        // Step C: Critic scores the futures and picks the best one
         Command best_cmd = calculate_best_command(all_trajectories, goal_x, goal_y, obstacles, robot_radius);
-
-        // Step D: EXECUTE! Move the robot for exactly one dt using the chosen command
-        // We use our predict function, but we only predict exactly 1 dt into the future.
+        
         vector<RobotState> execution = predict_trajectory(robot, best_cmd.v, best_cmd.w, dt, dt);
-        
-        // The robot actually moves to the new position
         robot = execution.back(); 
+        
+        // --- NEW: LOG THE DATA ---
+        log_file << robot.x << "," << robot.y << "," << robot.theta << "\n";
 
-        // Update the loop condition
         dist_to_goal = hypot(goal_x - robot.x, goal_y - robot.y);
-        
-        if (iteration % 10 == 0) {
-            cout << "Time: " << iteration * dt << "s | Pos: [" << robot.x << ", " << robot.y 
-                 << "] | Cmd: v=" << best_cmd.v << ", w=" << best_cmd.w 
-                 << " | Dist to goal: " << dist_to_goal << endl;
-        }
-        
         iteration++;
         
-        if (iteration > 200) {
-            cout << "SIMULATION TIMEOUT. Robot got stuck!" << endl;
+        if (iteration > 400) {
+            cout << "SIMULATION TIMEOUT." << endl;
             break;
         }
     }
 
-    if (dist_to_goal <= 0.1) {
-        cout << "\nSUCCESS! Goal reached at [" << robot.x << ", " << robot.y << "]" << endl;
-    }
+    log_file.close(); // Close the file
+    cout << "\nFinished. Data written to robot_path.csv" << endl;
 
     return 0;
 }
