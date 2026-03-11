@@ -152,7 +152,18 @@ Command calculate_best_command(vector<vector<RobotState>>& rollouts, float g_x, 
 }
 
 // ==============================================================================
-// 4. THE MASTER NODE (Bringing it all together)
+// 4. COST MAP
+// ==============================================================================
+class CostMap {
+public:
+    vector<int> costmap_data;
+
+}
+
+
+
+// ==============================================================================
+// 5. THE MASTER NODE (Bringing it all together)
 // ==============================================================================
 int main() {
     // A 10x10 Map. 0 = Free, 1 = Wall.
