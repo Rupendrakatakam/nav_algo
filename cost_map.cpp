@@ -23,10 +23,10 @@ vector<float> generate_costmap(const vector<int>& binary_grid, int width, int he
     // TODO: Loop through the entire binary_grid.
     // If a cell is a wall (1), set its dist_map value to 0.0 and push it into the queue 'q'.
 
-    for (int i = 0; i < height ; i++){
-        for (int j = 0; j < width ; j++){
-            if (binary_grid[i * width + j] == 1){
-                dist_map[i * width + j] = 0.0;
+    for (int i = 0; i < width ; i++){
+        for (int j = 0; j < height ; j++){
+            if (binary_grid[j * width + i] == 1){
+                dist_map[j * width + i] = 0.0;
                 q.push({i, j, 0.0});
             }
         }
