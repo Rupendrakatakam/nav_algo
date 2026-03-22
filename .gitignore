@@ -1,0 +1,29 @@
+# Compiled output
+*.o
+*.out
+a.out
+astar
+astar_rust
+
+# Logs and Data
+*.log
+*.csv
+sim_log.csv
+robot_path.csv
+global_path.csv
+map.csv
+debug.log
+debug2.log
+
+# Temporary / OS files
+*.swp
+*~
+.DS_Store
+
+# Patch files
+*.patch
+test_dwa.patch
+print_crash.patch
+
+# Visuals (unless you want to track them)
+# simulation.gif (Uncomment if you don't want to track GIFs)
