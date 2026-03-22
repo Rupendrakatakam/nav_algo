@@ -1,0 +1,14 @@
+--- astar.cpp
++++ astar.cpp
+@@ -192,6 +192,11 @@
+             if(cost < best_c) { best_c = cost; best_cmd = {v, omega}; }
+         }
+     }
++    
++    // For debugging
++    if (best_c == 1e9) {
++        cout << "DWA COULD NOT FIND A VALID COMMAND at " << r.x << "," << r.y << "\n";
++    }
+     return best_cmd;
+ }
+ 

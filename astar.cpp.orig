@@ -188,15 +188,14 @@ Command calculate_dwa(RobotState r, float tx, float ty, const vector<float>& cos
             while(heading_err > M_PI) heading_err -= 2*M_PI;
             while(heading_err < -M_PI) heading_err += 2*M_PI;
 
-            float cost = 1.0*hypot(tx-end.x, ty-end.y) + 100.0*(max_cost/100.0) + 1.0*abs(heading_err) - 2.0*end.v;
+            float cost = 1.0*hypot(tx-end.x, ty-end.y) + 15.0*(max_cost/100.0) + 1.0*abs(heading_err) - 2.0*end.v;
             if(cost < best_c) { best_c = cost; best_cmd = {v, omega}; }
         }
     }
     
+    // For debugging
     if (best_c == 1e9) {
-        int cidx = round(r.y)*w + round(r.x);
-        cout << "DWA COULD NOT FIND A VALID COMMAND at " << r.x << "," << r.y;
-        cout << " Current costmap val: " << costmap[cidx] << "\n";
+        cout << "DWA COULD NOT FIND A VALID COMMAND at " << r.x << "," << r.y << "\n";
     }
     return best_cmd;
 }
@@ -248,17 +247,8 @@ int main() {
             continue; 
         }
 
-        // 4. Find Carrot (Proper Pure Pursuit Lookahead)
-        float min_dist = 1e9;
-        int closest_idx = 0;
-        for (int i = 0; i < global_path.size(); i++) {
-            float d = hypot(robot.x - global_path[i].x, robot.y - global_path[i].y);
-            if (d < min_dist) { 
-                min_dist = d; 
-                closest_idx = i; 
-            }
-        }
-        int target_idx = min((int)global_path.size() - 1, closest_idx + 5); 
+        // 4. Find Carrot (Now 100% memory safe because we know the path is NOT empty)
+        int target_idx = min((int)global_path.size() - 1, 5); 
         float tx = global_path[target_idx].x;
         float ty = global_path[target_idx].y;
 

@@ -1,0 +1,14 @@
+--- astar.cpp
++++ astar.cpp
+@@ -193,7 +193,8 @@
+         }
+     }
+     
+-    // For debugging
+     if (best_c == 1e9) {
+-        cout << "DWA COULD NOT FIND A VALID COMMAND at " << r.x << "," << r.y << "\n";
++        int cidx = round(r.y)*w + round(r.x);
++        cout << "DWA COULD NOT FIND A VALID COMMAND at " << r.x << "," << r.y;
++        cout << " Current costmap val: " << costmap[cidx] << "\n";
+     }
+     return best_cmd;
