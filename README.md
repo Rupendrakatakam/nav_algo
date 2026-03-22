@@ -1,5 +1,9 @@
 # Custom Navigation Stack: A* & DWA with Dynamic Obstacle Avoidance
 
+![Navigation Simulation](simulation.gif)
+
+*The animation above demonstrates the robot recognizing a dynamic moving obstacle (e.g., a human pedestrian) and seamlessly dodging it using the intelligent DWA local planner while continuing toward its main A* global trajectory goal.*
+
 This repository implements a lightweight, fully custom **2D Navigation Stack** built entirely from scratch in C++. It features a hybrid architecture combining global pathfinding with highly reactive local obstacle avoidance.
 
 ## Architecture Highlights
