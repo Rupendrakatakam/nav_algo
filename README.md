@@ -53,3 +53,5 @@ float cost = 1.0 * dist_to_carrot
            - 2.0 * speed;
 ```
 Try modifying the `100.0` penalization parameter up or down if you wish to see the robot act more aggressively inside tight spaces!
+
+
