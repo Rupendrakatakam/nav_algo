@@ -178,7 +178,7 @@ Command calculate_dwa(RobotState r, float tx, float ty, const vector<float>& cos
             for(auto s : traj) {
                 int idx = round(s.x) + round(s.y) * w;
                 if(idx >= 0 && idx < w*h) {
-                    if(costmap[idx] >= 100.0f) { crashed = true; break; }
+                    if(costmap[idx] >= 50.0f) { crashed = true; break; }
                     if(costmap[idx] > max_cost) max_cost = costmap[idx];
                 }
             }
@@ -188,7 +188,7 @@ Command calculate_dwa(RobotState r, float tx, float ty, const vector<float>& cos
             while(heading_err > M_PI) heading_err -= 2*M_PI;
             while(heading_err < -M_PI) heading_err += 2*M_PI;
 
-            float cost = 1.0*hypot(tx-end.x, ty-end.y) + 50.0*(max_cost/100.0) + 1.0*abs(heading_err) + 10.0*(end.v < 0.05f ? 1.0f : 0.0f);
+            float cost = 1.0*hypot(tx-end.x, ty-end.y) + 500.0*(max_cost/100.0) + 1.0*abs(heading_err) + 10.0*(end.v < 0.05f ? 1.0f : 0.0f);
             if(cost < best_c) { best_c = cost; best_cmd = {v, omega}; }
         }
     }
@@ -210,9 +210,9 @@ int main() {
 
     AStarPlanner planner;
     // Use tight inflation for static walls, but smaller for dynamic obstacles
-    vector<float> static_map = planner.generate_static_costmap(grid, w, h, 0.8, 2.5);
+    vector<float> static_map = planner.generate_static_costmap(grid, w, h, 1.2, 2.5);
     // Dynamic: smaller inflation (2.0) so human doesn't seal an 8-cell-wide gap
-    DynamicCostmap live_map(static_map, w, h, 0.8, 2.5);
+    DynamicCostmap live_map(static_map, w, h, 1.2, 1.5);
 
     RobotState robot = {1.0, 1.0, 0.0, 0.0, 0.0};
     int gx = 18, gy = 18;
@@ -252,6 +252,11 @@ int main() {
 
         // 3. Fallback Behavior
         if (global_path.empty()) {
+            // If robot is already within the goal radius, finish even though a path is missing
+            if (hypot(gx - robot.x, gy - robot.y) < 1.0) {
+                cout << "Goal Reached!" << endl;
+                break;
+            }
             robot.v = 0.0;
             robot.w = 0.0;
             log << robot.x << "," << robot.y << "," << robot.theta << "," << human1.x << "," << human1.y << "," << human2.x << "," << human2.y << "\n";
@@ -261,14 +266,15 @@ int main() {
         // 4. Find Carrot (Proper Pure Pursuit Lookahead)
         float min_dist = 1e9;
         int closest_idx = 0;
-        for (int i = 0; i < global_path.size(); i++) {
+        for (size_t i = 0; i < global_path.size(); i++) {
             float d = hypot(robot.x - global_path[i].x, robot.y - global_path[i].y);
             if (d < min_dist) { 
                 min_dist = d; 
                 closest_idx = i; 
             }
         }
-        int target_idx = min((int)global_path.size() - 1, closest_idx + 10); 
+        int lookahead = 20;
+int target_idx = min((int)global_path.size() - 1, closest_idx + lookahead); 
         float tx = global_path[target_idx].x;
         float ty = global_path[target_idx].y;
 
@@ -286,6 +292,17 @@ int main() {
     }
     
     log.close();
+
+    ofstream cmap("costmap.csv");
+    for(int y = 0; y < h; y++) {
+        for(int x = 0; x < w; x++) {
+            cmap << live_map.get_active_map()[y * w + x];
+            if(x < w-1) cmap << ",";
+        }
+        cmap << "\n";
+    }
+    cmap.close();
+
     cout << "Simulation complete. Run Python visualizer." << endl;
     return 0;
 }
