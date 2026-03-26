@@ -8,23 +8,32 @@ import math
 data = pd.read_csv("sim_log.csv")
 
 fig, ax = plt.subplots(figsize=(8, 8))
-ax.set_xlim(-1, 16)
-ax.set_ylim(-1, 16)
-ax.set_title("God Mode: Dynamic Obstacle Replanning")
+ax.set_xlim(-1, 21)
+ax.set_ylim(-1, 21)
+ax.set_title("God Mode: Dynamic Obstacle Replanning (Complex Map)")
 ax.grid(True)
 
-# Draw Static Wall (Matches C++ grid)
-for i in range(4, 11):
-    ax.add_patch(Rectangle((5 - 0.5, i - 0.5), 1.0, 1.0, color='#333333'))
+# Draw Static Walls (3-wall S-curve maze matches C++)
+# Wall 1: x=4, rows 0..10
+for i in range(0, 11):
+    ax.add_patch(Rectangle((4 - 0.5, i - 0.5), 1.0, 1.0, color='#333333'))
+# Wall 2: x=9, rows 9..19
+for i in range(9, 20):
+    ax.add_patch(Rectangle((9 - 0.5, i - 0.5), 1.0, 1.0, color='#333333'))
+# Wall 3: x=14, rows 0..10
+for i in range(0, 11):
+    ax.add_patch(Rectangle((14 - 0.5, i - 0.5), 1.0, 1.0, color='#333333'))
 
-ax.plot(13, 13, 'go', markersize=10, label="Goal")
+ax.plot(18, 18, 'go', markersize=10, label="Goal")
 
-# Robot and Human
+# Robot and Humans
 robot_size = 0.8
 robot_patch = Rectangle((0, 0), robot_size, robot_size, color='blue', zorder=5, label="Robot")
-human_patch = Circle((0, 0), 0.5, color='red', zorder=6, label="Moving Human")
+human1_patch = Circle((0, 0), 0.5, color='red', zorder=6, label="Moving Human 1")
+human2_patch = Circle((0, 0), 0.5, color='darkred', zorder=6, label="Moving Human 2")
 ax.add_patch(robot_patch)
-ax.add_patch(human_patch)
+ax.add_patch(human1_patch)
+ax.add_patch(human2_patch)
 
 trail, = ax.plot([], [], 'b--', alpha=0.5)
 hx, hy = [], []
@@ -43,10 +52,11 @@ def update(frame):
     hy.append(ry)
     trail.set_data(hx, hy)
     
-    # Update Human
-    human_patch.center = (row['hx'], row['hy'])
+    # Update Humans
+    human1_patch.center = (row['hx1'], row['hy1'])
+    human2_patch.center = (row['hx2'], row['hy2'])
     
-    return robot_patch, human_patch, trail
+    return robot_patch, human1_patch, human2_patch, trail
 
 ani = animation.FuncAnimation(fig, update, frames=len(data), interval=50, blit=True)
 plt.legend(loc="upper left")

@@ -150,7 +150,7 @@ public:
 
     bool is_path_blocked(int w, const vector<float>& costmap, const vector<Node>& path) {
         for (const auto& n : path) {
-            if (costmap[n.y * w + n.x] >= 100.0f) return true;
+            if (costmap[n.x + n.y * w] >= 100.0f) return true;
         }
         return false;
     }
@@ -169,14 +169,14 @@ vector<RobotState> predict_traj(RobotState s, float v, float w, float sim, float
 
 Command calculate_dwa(RobotState r, float tx, float ty, const vector<float>& costmap, int w, int h) {
     float best_c = 1e9; Command best_cmd = {0,0};
-    for(float v = 0.0; v <= 1.0; v += 0.1) {
+    for(float v = 0.1; v <= 1.0; v += 0.1) {
         for(float omega = -1.0; omega <= 1.0; omega += 0.1) {
             auto traj = predict_traj(r, v, omega, 2.0, 0.1);
             auto end = traj.back();
             bool crashed = false; float max_cost = 0;
             
             for(auto s : traj) {
-                int idx = round(s.y)*w + round(s.x);
+                int idx = round(s.x) + round(s.y) * w;
                 if(idx >= 0 && idx < w*h) {
                     if(costmap[idx] >= 100.0f) { crashed = true; break; }
                     if(costmap[idx] > max_cost) max_cost = costmap[idx];
@@ -188,63 +188,73 @@ Command calculate_dwa(RobotState r, float tx, float ty, const vector<float>& cos
             while(heading_err > M_PI) heading_err -= 2*M_PI;
             while(heading_err < -M_PI) heading_err += 2*M_PI;
 
-            float cost = 1.0*hypot(tx-end.x, ty-end.y) + 100.0*(max_cost/100.0) + 1.0*abs(heading_err) - 2.0*end.v;
+            float cost = 1.0*hypot(tx-end.x, ty-end.y) + 50.0*(max_cost/100.0) + 1.0*abs(heading_err) + 10.0*(end.v < 0.05f ? 1.0f : 0.0f);
             if(cost < best_c) { best_c = cost; best_cmd = {v, omega}; }
         }
     }
     
-    if (best_c == 1e9) {
-        int cidx = round(r.y)*w + round(r.x);
-        cout << "DWA COULD NOT FIND A VALID COMMAND at " << r.x << "," << r.y;
-        cout << " Current costmap val: " << costmap[cidx] << "\n";
-    }
     return best_cmd;
 }
 
 // --- MASTER EXECUTION ---
 int main() {
-    int w = 15, h = 15;
+    int w = 20, h = 20;
     vector<int> grid(w * h, 0);
-    // Draw a static wall
-    for(int i=4; i<=10; i++) grid[i*w + 5] = 1;
+    // Maze: each wall leaves a wide gap so robot can always slip through
+    // Wall 1: x=4, rows 0..10  → gap rows 11..19
+    for(int i=0; i<=10; i++) grid[i*w + 4] = 1;
+    // Wall 2: x=9, rows 9..19  → gap rows 0..8
+    for(int i=9; i<=19; i++) grid[i*w + 9] = 1;
+    // Wall 3: x=14, rows 0..10 → gap rows 11..19
+    for(int i=0; i<=10; i++) grid[i*w + 14] = 1;
 
     AStarPlanner planner;
-    vector<float> static_map = planner.generate_static_costmap(grid, w, h, 1.2, 3.5);
-    DynamicCostmap live_map(static_map, w, h, 1.2, 3.5);
+    // Use tight inflation for static walls, but smaller for dynamic obstacles
+    vector<float> static_map = planner.generate_static_costmap(grid, w, h, 0.8, 2.5);
+    // Dynamic: smaller inflation (2.0) so human doesn't seal an 8-cell-wide gap
+    DynamicCostmap live_map(static_map, w, h, 0.8, 2.5);
 
     RobotState robot = {1.0, 1.0, 0.0, 0.0, 0.0};
-    int gx = 13, gy = 13;
+    int gx = 18, gy = 18;
     
     // Initial Plan
     vector<Node> global_path = planner.find_path(1, 1, gx, gy, w, h, static_map);
     
-    // The moving human
-    Point human = {8.0, 12.0};
+    // Human 1: patrols the bottom section of gap-1 (x=4, y=11..15)
+    // They obstruct the lower half of the gap forcing the robot to time its crossing
+    Point human1 = {4.0, 13.0};
+    float h1_dir = 1.0;
+
+    // Human 2: patrols gap-2 (x=9, y=3..7) — crosses the upper opening
+    Point human2 = {9.0, 5.0};
+    float h2_dir = 1.0;
 
     ofstream log("sim_log.csv");
-    log << "rx,ry,rtheta,hx,hy\n";
+    log << "rx,ry,rtheta,hx1,hy1,hx2,hy2\n";
 
     cout << "Starting God Mode Simulation..." << endl;
 
-    for (int step = 0; step < 500; step++) {
-        // 1. Move the human down blocking the corridor
-        human.y -= 0.1; 
-        live_map.update_live_sensors({human});
+    for (int step = 0; step < 2000; step++) {
+        // 1. Move humans
+        human1.y += h1_dir * 0.15;
+        if (human1.y > 15.5 || human1.y < 11.5) h1_dir *= -1;
+
+        human2.y += h2_dir * 0.15;
+        if (human2.y > 7.5 || human2.y < 2.5) h2_dir *= -1;
+
+        live_map.update_live_sensors({human1, human2});
 
         // 2. Replanning Trigger!
         // If we have no path, OR the current path is blocked, try to find a new one
         if (global_path.empty() || planner.is_path_blocked(w, live_map.get_active_map(), global_path)) {
-            // cout << "STEP " << step << ": Replanning..." << endl; // Optional: Comment out so terminal isn't spammed
             global_path = planner.find_path(round(robot.x), round(robot.y), gx, gy, w, h, live_map.get_active_map());
         }
 
-        // 3. Fallback Behavior: The Survival Instinct
+        // 3. Fallback Behavior
         if (global_path.empty()) {
-            cout << "STEP " << step << ": Hallway blocked! WAITING for human to pass..." << endl;
             robot.v = 0.0;
             robot.w = 0.0;
-            // Log the frozen state and skip DWA this frame
-            log << robot.x << "," << robot.y << "," << robot.theta << "," << human.x << "," << human.y << "\n";
+            log << robot.x << "," << robot.y << "," << robot.theta << "," << human1.x << "," << human1.y << "," << human2.x << "," << human2.y << "\n";
             continue; 
         }
 
@@ -258,16 +268,16 @@ int main() {
                 closest_idx = i; 
             }
         }
-        int target_idx = min((int)global_path.size() - 1, closest_idx + 5); 
+        int target_idx = min((int)global_path.size() - 1, closest_idx + 10); 
         float tx = global_path[target_idx].x;
         float ty = global_path[target_idx].y;
 
-        // 4. DWA
+        // 5. DWA
         Command cmd = calculate_dwa(robot, tx, ty, live_map.get_active_map(), w, h);
         auto exec = predict_traj(robot, cmd.v, cmd.w, 0.1, 0.1);
         robot = exec.back();
 
-        log << robot.x << "," << robot.y << "," << robot.theta << "," << human.x << "," << human.y << "\n";
+        log << robot.x << "," << robot.y << "," << robot.theta << "," << human1.x << "," << human1.y << "," << human2.x << "," << human2.y << "\n";
 
         if (hypot(gx - robot.x, gy - robot.y) < 1.0) {
             cout << "Goal Reached!" << endl;
